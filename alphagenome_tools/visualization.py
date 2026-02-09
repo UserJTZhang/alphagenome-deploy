@@ -65,14 +65,36 @@ def quick_plot(outputs, figsize=(12, 6), save_path: Optional[Path] = None):
 
     fig, ax = plt.subplots(figsize=figsize)
 
-    # This is a placeholder - actual implementation depends on output structure
-    # TODO: Implement based on actual AlphaGenome output structure
-
-    ax.text(0.5, 0.5, 'AlphaGenome Output Visualization',
-            ha='center', va='center', transform=ax.transAxes, fontsize=14)
-    ax.set_xlabel('Genomic Position')
-    ax.set_ylabel('Prediction Score')
-    ax.set_title('AlphaGenome Prediction Results')
+    # Extract RNA-seq data if available
+    data_plotted = False
+    
+    if hasattr(outputs, 'rna_seq') and outputs.rna_seq is not None:
+        rna_data = outputs.rna_seq
+        if hasattr(rna_data, 'values') and rna_data.values is not None:
+            # Average across all tracks (cell types/tissues)
+            mean_expression = np.mean(rna_data.values, axis=1)
+            
+            # Create x-axis (genomic positions)
+            interval = rna_data.interval
+            positions = np.linspace(interval.start, interval.end, len(mean_expression))
+            
+            # Plot mean expression
+            ax.plot(positions, mean_expression, linewidth=1, alpha=0.8, color='steelblue')
+            ax.fill_between(positions, mean_expression, alpha=0.3, color='steelblue')
+            
+            ax.set_xlabel(f'Genomic Position ({interval.chromosome})')
+            ax.set_ylabel('Mean RNA Expression')
+            ax.set_title(f'AlphaGenome RNA-seq Prediction\n{interval.chromosome}:{interval.start:,}-{interval.end:,}')
+            ax.grid(True, alpha=0.3)
+            data_plotted = True
+    
+    # If no data was plotted, show placeholder
+    if not data_plotted:
+        ax.text(0.5, 0.5, 'No RNA-seq data available in outputs',
+                ha='center', va='center', transform=ax.transAxes, fontsize=12)
+        ax.set_xlabel('Genomic Position')
+        ax.set_ylabel('Prediction Score')
+        ax.set_title('AlphaGenome Prediction Results')
 
     plt.tight_layout()
 
@@ -113,19 +135,65 @@ def plot_variant_comparison(
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
 
-    # Plot reference
-    # TODO: Implement based on actual AlphaGenome output structure
-    ax1.text(0.5, 0.5, f'Reference\n{variant.reference_bases}',
-             ha='center', va='center', transform=ax1.transAxes, fontsize=14)
-    ax1.set_title('Reference Allele')
-    ax1.set_xlabel('Genomic Position')
-    ax1.set_ylabel('Prediction Score')
-
-    # Plot alternate
-    ax2.text(0.5, 0.5, f'Alternate\n{variant.alternate_bases}',
-             ha='center', va='center', transform=ax2.transAxes, fontsize=14, color='red')
-    ax2.set_title('Alternate Allele')
-    ax2.set_xlabel('Genomic Position')
+    # Extract RNA-seq data for both alleles
+    ref_plotted = False
+    alt_plotted = False
+    
+    # Plot reference allele
+    if hasattr(ref_outputs, 'rna_seq') and ref_outputs.rna_seq is not None:
+        rna_data = ref_outputs.rna_seq
+        if hasattr(rna_data, 'values') and rna_data.values is not None:
+            mean_expression = np.mean(rna_data.values, axis=1)
+            interval = rna_data.interval
+            positions = np.linspace(interval.start, interval.end, len(mean_expression))
+            
+            ax1.plot(positions, mean_expression, linewidth=1.5, alpha=0.8, color='steelblue')
+            ax1.fill_between(positions, mean_expression, alpha=0.3, color='steelblue')
+            
+            # Mark variant position
+            ax1.axvline(variant.position, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Variant')
+            
+            ax1.set_xlabel(f'Genomic Position ({interval.chromosome})', fontsize=10)
+            ax1.set_ylabel('Mean RNA Expression', fontsize=10)
+            ax1.set_title(f'Reference Allele ({variant.reference_bases})', fontsize=12, fontweight='bold')
+            ax1.grid(True, alpha=0.3)
+            ax1.legend()
+            ref_plotted = True
+    
+    # Plot alternate allele
+    if hasattr(alt_outputs, 'rna_seq') and alt_outputs.rna_seq is not None:
+        rna_data = alt_outputs.rna_seq
+        if hasattr(rna_data, 'values') and rna_data.values is not None:
+            mean_expression = np.mean(rna_data.values, axis=1)
+            interval = rna_data.interval
+            positions = np.linspace(interval.start, interval.end, len(mean_expression))
+            
+            ax2.plot(positions, mean_expression, linewidth=1.5, alpha=0.8, color='coral')
+            ax2.fill_between(positions, mean_expression, alpha=0.3, color='coral')
+            
+            # Mark variant position
+            ax2.axvline(variant.position, color='red', linestyle='--', alpha=0.7, linewidth=2, label='Variant')
+            
+            ax2.set_xlabel(f'Genomic Position ({interval.chromosome})', fontsize=10)
+            ax2.set_ylabel('Mean RNA Expression', fontsize=10)
+            ax2.set_title(f'Alternate Allele ({variant.alternate_bases})', fontsize=12, fontweight='bold', color='darkred')
+            ax2.grid(True, alpha=0.3)
+            ax2.legend()
+            alt_plotted = True
+    
+    # If no data plotted, show placeholder
+    if not ref_plotted:
+        ax1.text(0.5, 0.5, f'Reference\n{variant.reference_bases}\nNo data',
+                 ha='center', va='center', transform=ax1.transAxes, fontsize=12)
+        ax1.set_title('Reference Allele')
+        ax1.set_xlabel('Genomic Position')
+        ax1.set_ylabel('Prediction Score')
+    
+    if not alt_plotted:
+        ax2.text(0.5, 0.5, f'Alternate\n{variant.alternate_bases}\nNo data',
+                 ha='center', va='center', transform=ax2.transAxes, fontsize=12, color='red')
+        ax2.set_title('Alternate Allele')
+        ax2.set_xlabel('Genomic Position')
     ax2.set_ylabel('Prediction Score')
 
     # Set overall title
@@ -181,7 +249,10 @@ def plot_batch_summary(
         success_counts.plot(kind='bar', ax=ax, color=colors)
         ax.set_ylabel('Count')
         ax.set_title('Batch Prediction Summary')
-        ax.set_xticklabels(['Success', 'Failure'], rotation=0)
+        
+        # Set x-tick labels based on actual data
+        labels = ['Success' if idx else 'Failure' for idx in success_counts.index]
+        ax.set_xticklabels(labels, rotation=0)
 
         # Add count labels on bars
         for i, (idx, count) in enumerate(success_counts.items()):
@@ -374,15 +445,29 @@ def create_multi_panel_figure(
         axes = axes.flatten()
 
     # Plot each panel
-    for i, (outputs, ax) in enumerate(zip(outputs_list, axes)):
-        # TODO: Implement actual plotting based on AlphaGenome output structure
-        ax.text(0.5, 0.5, f'Panel {i+1}', ha='center', va='center',
-                transform=ax.transAxes, fontsize=12)
+    for i, (data, ax) in enumerate(zip(outputs_list, axes)):
+        # Handle different data types
+        if isinstance(data, np.ndarray):
+            if data.ndim == 1:
+                # 1D array - line plot
+                ax.plot(data, linewidth=1.5)
+                ax.set_xlabel('Position')
+                ax.set_ylabel('Value')
+            elif data.ndim == 2:
+                # 2D array - heatmap
+                im = ax.imshow(data, aspect='auto', cmap='viridis')
+                plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+                ax.set_xlabel('Position')
+                ax.set_ylabel('Sample')
+        else:
+            # Fallback for unknown data types
+            ax.text(0.5, 0.5, f'Panel {i+1}\nUnsupported data type', 
+                   ha='center', va='center', transform=ax.transAxes, fontsize=10)
 
         if titles and i < len(titles):
-            ax.set_title(titles[i])
+            ax.set_title(titles[i], fontweight='bold')
         else:
-            ax.set_title(f'Panel {i+1}')
+            ax.set_title(f'Panel {i+1}', fontweight='bold')
 
     # Hide extra axes
     for i in range(n_panels, len(axes)):
